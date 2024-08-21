@@ -1,0 +1,53 @@
+name: Build, SAST Check, and Deploy
+
+on:
+  push:
+    branches:
+      - main  # Adjust this to your main branch name
+
+jobs:
+  sast-check-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '7.0'  # Adjust this to your .NET version
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build application
+        run: dotnet build --configuration Release
+
+      - name: Publish application
+        run: dotnet publish --configuration Release --output ./publish
+
+      - name: Create project zip
+        run: zip -r project.zip ./publish -x "*.git*"
+
+      - name: Perform SAST Scan
+        id: sast
+        run: |
+          RESPONSE=$(curl -X POST \
+            -H "Client-ID: ${{ secrets.SAST_CLIENT_ID }}" \
+            -H "Client-Secret: ${{ secrets.SAST_CLIENT_SECRET }}" \
+            -F "projectZipFile=@project.zip" \
+            -F "applicationId=${{ secrets.INTRUCEPT_APPLICATION_ID }}" \
+            -F "scanName=New Scan C# from API Github actions" \
+            -F "language=csharp" \
+            https://sast-backend.intruceptlabs.com/api/v1/integrations/performSASTScan)
+          
+          echo "SAST Response: $RESPONSE"
+          
+          CAN_PROCEED=$(echo $RESPONSE | jq -r '.canProceed')
+          echo "canProceed=$CAN_PROCEED" >> $GITHUB_ENV
+
+      - name: Check SAST result
+        if: env.canProceed != 'true'
+        run: |
+          echo "SAST scan failed. Deployment cancelled."
+          exit 1
