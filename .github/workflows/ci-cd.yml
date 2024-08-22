@@ -42,7 +42,7 @@ jobs:
             https://sast-backend.intruceptlabs.com/api/v1/integrations/performSASTScan)
           
           echo "SAST Response: $RESPONSE"
-          
+
           CAN_PROCEED=$(echo $RESPONSE | jq -r '.canProceed')
           echo "canProceed=$CAN_PROCEED" >> $GITHUB_ENV
 
